@@ -36,7 +36,7 @@ public class GeoLookupService {
     private Properties dbProps = null;
     private Connection connection = null;
 
-    public GeoLookupService() throws SQLException {
+    public GeoLookupService() {
 
         try {
 
@@ -54,7 +54,7 @@ public class GeoLookupService {
 
         } catch (Exception e) {
             System.out.println("Failed to initialise the GeoLookupService class due to an issue reading the database.properties file.\n"
-                    + "Blow are the first 5 elements of the stack trace from the exception:\n");
+                    + "Below are the first 5 elements of the stack trace from the exception:\n");
 
             if (e.getStackTrace().length > 5) {
                 for (int a = 0; a < 5; a++) {
