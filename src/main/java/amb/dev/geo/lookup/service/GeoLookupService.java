@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.micromata.opengis.kml.v_2_2_0.Document;
 import de.micromata.opengis.kml.v_2_2_0.Geometry;
+import dev.amb.geo.data.input.GeoArea;
+import dev.amb.geo.data.input.SimpleCoord;
+import dev.amb.geo.data.output.GeoLookup;
 import dev.amb.geo.data.output.GeoResult;
 import java.net.URL;
 import java.sql.Connection;
@@ -69,6 +72,9 @@ public class GeoLookupService {
     @Consumes(MediaType.TEXT_PLAIN)
     @Produces(MediaType.APPLICATION_JSON)
     public Response getPlacenamesJson(@QueryParam("placename") ArrayList<String> places) {
+
+        GeoResult geoResult = new GeoResult();
+
         String sql = "";
         try {
             Statement statement = this.connection.createStatement();
@@ -88,19 +94,21 @@ public class GeoLookupService {
             ResultSet results = statement.executeQuery(sql);
 
             if (results != null && results.next() == true) {
-                ArrayList<GeoResult> resultGeos = new ArrayList<GeoResult>();
+                ArrayList<GeoLookup> geoLookups = new ArrayList<GeoLookup>();
 
                 while (results.next()) {
-                    GeoResult geo = new GeoResult();
+                    GeoLookup geo = new GeoLookup();
                     geo.setPlacename(results.getString(1));
                     geo.setCountry(results.getString(2));
                     geo.setLatitude(results.getDouble(3));
                     geo.setLongitude(results.getDouble(4));
-                    resultGeos.add(geo);
+                    geoLookups.add(geo);
                 }
 
+                geoResult.setGeos(geoLookups);
+
                 ObjectMapper mapper = new ObjectMapper();
-                return Response.status(Response.Status.OK).entity(mapper.writeValueAsString(resultGeos)).build();
+                return Response.status(Response.Status.OK).entity(mapper.writeValueAsString(geoResult)).build();
 
             } else {
                 return Response.status(Response.Status.OK).entity("{}").build();
@@ -119,6 +127,66 @@ public class GeoLookupService {
                     Response.status(Response.Status.BAD_REQUEST).entity("General exception : (" + e.getMessage() + ")").build());
         }
     }
+
+    @GET
+    @Path("/place")
+    @Consumes(MediaType.TEXT_PLAIN)
+    @Produces(MediaType.TEXT_XML)
+    public Response getPlacenamesKml(@QueryParam("placename") ArrayList<String> places) {
+
+        GeoResult geoResult = new GeoResult();
+
+        String sql = "";
+        try {
+            Statement statement = this.connection.createStatement();
+
+            for (String placename : places) {
+
+                placename = this.escapeQueryCharacters(placename);
+
+                if (sql.equals("") == true) {
+                    sql = placename;
+                } else {
+                    sql = sql + " OR " + placename;
+                }
+            }
+            // TODO Review the SQL format
+            sql = "SELECT name, country, latitude, longitude FROM geoname, country WHERE name = (" + sql + ") ORDER BY name ASC";
+            ResultSet results = statement.executeQuery(sql);
+
+            if (results != null && results.next() == true) {
+                ArrayList<GeoLookup> geoLookups = new ArrayList<GeoLookup>();
+
+                while (results.next()) {
+                    GeoLookup geo = new GeoLookup();
+                    geo.setPlacename(results.getString(1));
+                    geo.setCountry(results.getString(2));
+                    geo.setLatitude(results.getDouble(3));
+                    geo.setLongitude(results.getDouble(4));
+                    geoLookups.add(geo);
+                }
+
+                geoResult.setGeos(geoLookups);
+
+                // get KML string
+                String kml = KmlUtil.createGeoLookupKml(geoLookups);
+
+                return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity(kml).build();
+
+            } else {
+                return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity("</>").build();
+            }
+
+        } catch (Exception e) {
+                throw new WebApplicationException(
+                        Response
+                        .status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.TEXT_XML)
+                        .entity("<Exception searching DB :: " + " (" + e.getMessage() + ")/>")
+                        .build());
+            }
+    }
+
     
     
     // search for places in a list of countries
@@ -127,6 +195,7 @@ public class GeoLookupService {
     @Consumes(MediaType.TEXT_PLAIN)
     @Produces(MediaType.APPLICATION_JSON)
     public Response getPlacesInCountriesJson(@QueryParam("places") ArrayList<String> places, @QueryParam("countries") ArrayList<String> countries) {
+        GeoResult geoResult = new GeoResult();
         String sql = "";
         try {
 
@@ -147,19 +216,21 @@ public class GeoLookupService {
             ResultSet results = statement.executeQuery(sql);
 
             if (results != null && results.next() == true) {
-                ArrayList<GeoResult> resultGeos = new ArrayList<GeoResult>();
+                ArrayList<GeoLookup> geoLookups = new ArrayList<GeoLookup>();
 
                 while (results.next()) {
-                    GeoResult geo = new GeoResult();
+                    GeoLookup geo = new GeoLookup();
                     geo.setPlacename(results.getString(1));
                     geo.setCountry(results.getString(2));
                     geo.setLatitude(results.getDouble(3));
                     geo.setLongitude(results.getDouble(4));
-                    resultGeos.add(geo);
+                    geoLookups.add(geo);
                 }
 
+                geoResult.setGeos(geoLookups);
+
                 ObjectMapper mapper = new ObjectMapper();
-                return Response.status(Response.Status.OK).type(MediaType.APPLICATION_JSON).entity(mapper.writeValueAsString(resultGeos)).build();
+                return Response.status(Response.Status.OK).type(MediaType.APPLICATION_JSON).entity(mapper.writeValueAsString(geoResult)).build();
 
             } else {
                 return Response.status(Response.Status.OK).type(MediaType.APPLICATION_JSON).entity("{}").build();
@@ -179,81 +250,157 @@ public class GeoLookupService {
         }
     }
 
+    @GET
+    @Path("/place/country")
+    @Consumes(MediaType.TEXT_PLAIN)
+    @Produces(MediaType.TEXT_XML)
+    public Response getPlacesInCountriesKml(@QueryParam("places") ArrayList<String> places, @QueryParam("countries") ArrayList<String> countries) {
+        GeoResult geoResult = new GeoResult();
+        String sql = "";
 
-    // Get all places inside a bounding polygon
+        try {
+
+            Statement statement = this.connection.createStatement();
+
+            for (String placename : places) {
+
+                placename = this.escapeQueryCharacters(placename);
+
+                if (sql.equals("") == true) {
+                    sql = placename;
+                } else {
+                    sql = sql + " OR " + placename;
+                }
+            }
+            // TODO Review the SQL format
+            sql = "SELECT name, country, latitude, longitude FROM geoname, country WHERE name = (" + sql + ") ORDER BY name ASC";
+            ResultSet results = statement.executeQuery(sql);
+
+            if (results != null && results.next() == true) {
+                ArrayList<GeoLookup> geoLookups = new ArrayList<GeoLookup>();
+
+                while (results.next()) {
+                    GeoLookup geo = new GeoLookup();
+                    geo.setPlacename(results.getString(1));
+                    geo.setCountry(results.getString(2));
+                    geo.setLatitude(results.getDouble(3));
+                    geo.setLongitude(results.getDouble(4));
+                    geoLookups.add(geo);
+                }
+
+                geoResult.setGeos(geoLookups);
+
+                String kml = KmlUtil.createGeoLookupKml(geoLookups);
+                return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity(kml).build();
+
+            } else {
+                return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity("</>").build();
+            }
+        } catch (Exception e) {
+                throw new WebApplicationException(
+                        Response
+                        .status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.TEXT_XML)
+                        .entity("<Exception searching DB :: " + " (" + e.getMessage() + ")/>")
+                        .build());
+            }
+    }
+
+    
+    
+    // Get all places inside a list of bounding polygons
     @POST
     @Path("/places/polygon")
     @Consumes(MediaType.TEXT_PLAIN)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getPlacesInPolygonJson(String polyCoordList) {
+    public Response getPlacesInPolygonJson(ArrayList<String> polygonList) {
 
-        if (polyCoordList.equals("") == false) {
+        if (polygonList.isEmpty() || polygonList == null) {
+            return Response.status(Response.Status.BAD_REQUEST).type(MediaType.APPLICATION_JSON).entity("Input polygonCoords was blank").build();
 
-            ArrayList<String> polygons = this.getValidPolygons(polyCoordList);
-            String polySearchSQL = "";
-
-            if (polygons.isEmpty() == false) {
-                try {
-                    polySearchSQL = "SELECT name, country, lat, lon FROM geoname, country WHERE ( (country=iso) AND polygon ";
-
-                    String polyList = "";
-                    for (String poly : polygons) {
-                        if (polyList.equals("")) {
-                            polyList = poly;
-                        } else {
-                            polyList = polyList + "," + poly;
-                        }
-                    }
-                    polyList = " \' ( " + polyList + " ) \' ";
-
-                    polySearchSQL = polySearchSQL + polyList + " @> point_location )";
-                    System.out.println("SQL statement = \n" + polySearchSQL + "\n");
-
-                    Statement polyPlace = connection.createStatement();
-                    ResultSet results = polyPlace.executeQuery(polySearchSQL);
-
-                    if (results != null && results.next() == true) {
-                        ArrayList<GeoResult> resultGeos = new ArrayList<GeoResult>();
-
-                        while (results.next()) {
-                            GeoResult geo = new GeoResult();
-                            geo.setPlacename(results.getString(1));
-                            geo.setCountry(results.getString(2));
-                            geo.setLatitude(results.getDouble(3));
-                            geo.setLongitude(results.getDouble(4));
-                            resultGeos.add(geo);
-                        }
-
-                        ObjectMapper mapper = new ObjectMapper();
-                        return Response.status(Response.Status.OK).type(MediaType.APPLICATION_JSON).entity(mapper.writeValueAsString(resultGeos)).build();
-
-                    } else {
-                        return Response.status(Response.Status.OK).type(MediaType.APPLICATION_JSON).entity("{}").build();
-                    }
-
-                } catch (Exception e) {
-                    throw new WebApplicationException(
-                            Response
-                            .status(Response.Status.BAD_REQUEST)
-                            .type(MediaType.APPLICATION_JSON)
-                            .entity("Exception searching DB with input SQL :: " + polySearchSQL + " (" + e.getMessage() + ")")
-                            .build());
-                }
-            } else {
-                // TODO leave as default??
-                return Response.status(Response.Status.BAD_REQUEST).type(MediaType.APPLICATION_JSON).entity("Could not parse any valid polygons from :: <<" + polyCoordList + ">>").build();
-            }
         } else {
-            return Response.status(Response.Status.BAD_REQUEST).type(MediaType.APPLICATION_JSON).entity("Input polygonCoords was blank :: <<" + polyCoordList + ">>").build();
+            try {
+                GeoResult geoResult = new GeoResult();
+                ArrayList<GeoResult> geoResults = new ArrayList<GeoResult>();
+
+                // create a list of GeoResult objects, one for each polygon
+                for (String polygon : polygonList) {
+                    try {
+                        GeoResult geo = this.areaGeoSearch(polygon);
+                        if (geo != null) {
+                            geoResults.add(geo);
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Skipping input::" + polygon + "Due to an excpetion querying the PostgresDB ::\n" + e.getStackTrace().toString());
+                    }
+                }
+
+                // process results
+                if (geoResults.isEmpty() == true) {
+                    return Response.status(Response.Status.OK).type(MediaType.APPLICATION_JSON).entity("{}").build();
+                } else {
+                    // now return JSON string of results
+                    ObjectMapper mapper = new ObjectMapper();
+                    return Response.status(Response.Status.OK).type(MediaType.APPLICATION_JSON).entity(mapper.writeValueAsString(geoResults)).build();
+                }
+
+            } catch (Exception e) {
+                throw new WebApplicationException(
+                        Response
+                        .status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.APPLICATION_JSON)
+                        .entity("Exception searching DB :: " + " (" + e.getMessage() + ")")
+                        .build());
+            }
         }
     }
 
-    // TODO Add KML methods to return KML strings
+    @POST
+    @Path("/places/polygon")
+    @Consumes(MediaType.TEXT_PLAIN)
+    @Produces(MediaType.TEXT_XML)
+    public Response getPlacesInPolygonKml(ArrayList<String> polygonList) {
+
+        if (polygonList.isEmpty() || polygonList == null) {
+            return Response.status(Response.Status.BAD_REQUEST).type(MediaType.APPLICATION_JSON).entity("Input polygonCoords was blank").build();
+
+        } else {
+            try {
+                GeoResult geoResult = new GeoResult();
+                ArrayList<GeoResult> geoResults = new ArrayList<GeoResult>();
+
+                // create a list of GeoResult objects, one for each polygon
+                for (String polygon : polygonList) {
+                    try {
+                        GeoResult geo = this.areaGeoSearch(polygon);
+                        if (geo != null) {
+                            geoResults.add(geo);
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Skipping input::" + polygon + "Due to an excpetion querying the PostgresDB ::\n" + e.getStackTrace().toString());
+                    }
+                }
+
+                String kml = KmlUtil.createAreaSearchKml(geoResults);
+                return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity(kml).build();
+
+            } catch (Exception e) {
+                throw new WebApplicationException(
+                        Response
+                        .status(Response.Status.BAD_REQUEST)
+                        .type(MediaType.TEXT_XML)
+                        .entity("<Exception searching DB :: " + " (" + e.getMessage() + ")/>")
+                        .build());
+            }
+        }
+    }
+
+    
     
     // utility methods to validate input
-    private ArrayList<String> getValidPolygons(String polyCoordList) {
-        // assume input is (#,#),(#,#), ... , (#,#)
-        ArrayList<String> validPolygons = new ArrayList<String>();
+    private ArrayList<String> getValidPolyCoords(String polyCoordList) {
+        // assume input is (#,#),(#,#), ... , (#,#) for a polygon
+        ArrayList<String> validPolygonCoords = new ArrayList<String>();
 
         if (polyCoordList.equals("") == false || polyCoordList == null) {
             return null;
@@ -279,12 +426,83 @@ public class GeoLookupService {
                         polyCoords = polyCoords + "," + validCoord;
                     }
 
-                    validPolygons.add(polyCoords);
+                    validPolygonCoords.add(polyCoords);
 
                 }
 
-                return validPolygons;
+                return validPolygonCoords;
 
+            }
+        }
+    }
+
+    private GeoResult areaGeoSearch(String polygon) {
+
+        GeoResult geoResult = new GeoResult();
+
+        if (polygon.equals("") == true) {
+            return null;
+
+        } else {
+            ArrayList<String> polyCoords = this.getValidPolyCoords(polygon);
+
+            String polySearchSQL = "";
+
+            polySearchSQL = "SELECT name, country, lat, lon FROM geoname, country WHERE ( (country=iso) AND polygon ";
+
+            ArrayList<SimpleCoord> polyCoordinates = new ArrayList<SimpleCoord>();
+
+            GeoArea poly = new GeoArea();
+
+            String coordList = "";
+            for (String coord : polyCoords) {
+
+                polyCoordinates.add(new SimpleCoord(coord));
+
+                if (coordList.equals("") == true) {
+                    coordList = coord;
+                } else {
+                    coordList = coordList + " , " + coord;
+                }
+            }
+
+            // create object to hold the polygon, and add to GeoResult object
+            poly.setCoordinates(polyCoordinates);
+
+            geoResult.setSearchPoly(poly);
+
+
+            // process the SQL query
+            coordList = " \' ( " + coordList + " ) \' ";
+            polySearchSQL = polySearchSQL + coordList + " @> point_location )";
+
+            System.out.println("SQL statement = \n" + polySearchSQL + "\n");
+
+            try {
+
+                ArrayList<GeoLookup> geoLookups = new ArrayList<GeoLookup>();
+
+                Statement polyPlace = connection.createStatement();
+
+                ResultSet results = polyPlace.executeQuery(polySearchSQL);
+
+                if (results != null && results.next() == true) {
+
+                    while (results.next()) {
+                        GeoLookup geo = new GeoLookup();
+                        geo.setPlacename(results.getString(1));
+                        geo.setCountry(results.getString(2));
+                        geo.setLatitude(results.getDouble(3));
+                        geo.setLongitude(results.getDouble(4));
+                        geoLookups.add(geo);
+                    }
+                }
+
+                geoResult.setGeos(geoLookups);
+                return geoResult;
+
+            } catch (Exception e) {
+                return null;
             }
         }
     }
@@ -300,7 +518,7 @@ public class GeoLookupService {
 
         // trim brackets and spaces from input
         String inputValues = input.replace("(", "");
-        inputValues = inputValues.replaceAll(")", "");
+        inputValues = inputValues.replace(")", "");
         inputValues = inputValues.replaceAll(" ", "");
 
         String lat = "";
