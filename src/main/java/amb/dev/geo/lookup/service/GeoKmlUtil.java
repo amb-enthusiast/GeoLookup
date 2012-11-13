@@ -19,7 +19,7 @@ import java.util.ArrayList;
  *
  * @author AntB
  */
-public class KmlUtil {
+public class GeoKmlUtil {
 
     private final static String styleRef = "lookupStyle";
     // Geo methods
@@ -28,7 +28,7 @@ public class KmlUtil {
 
         Kml kml = new Kml();
         Document doc = kml.createAndSetDocument();
-        doc = KmlUtil.addDefaultStyle(doc);
+        doc = GeoKmlUtil.addDefaultStyle(doc);
 
         // we want a polygon, and corresponding placemarks
         Boundary bound = new Boundary();
@@ -57,7 +57,7 @@ public class KmlUtil {
         Kml kml = new Kml();
         Document doc = kml.createAndSetDocument();
 
-        doc = KmlUtil.addDefaultStyle(doc);
+        doc = GeoKmlUtil.addDefaultStyle(doc);
 
         for (GeoResult geos : geosIn) {
             // we want a polygon, and corresponding placemarks
@@ -84,7 +84,7 @@ public class KmlUtil {
     public static String createGeoLookupKml(ArrayList<GeoLookup> geos) throws FileNotFoundException {
         Kml kml = new Kml();
         Document doc = kml.createAndSetDocument();
-        doc = KmlUtil.addDefaultStyle(doc);
+        doc = GeoKmlUtil.addDefaultStyle(doc);
 
         // placemark for each GeoLookup result
         for (GeoLookup geo : geos) {
@@ -98,9 +98,9 @@ public class KmlUtil {
         String kmlString = baos.toString();
 
         return kmlString;
-    }
-
-    // TODO Report methods
+    }    
+    
+    
     // private utils
     private static Document addDefaultStyle(Document doc) {
         Style style = doc.createAndAddStyle().withId(styleRef);

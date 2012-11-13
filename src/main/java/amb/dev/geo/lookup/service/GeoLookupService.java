@@ -2,8 +2,6 @@ package amb.dev.geo.lookup.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import de.micromata.opengis.kml.v_2_2_0.Document;
-import de.micromata.opengis.kml.v_2_2_0.Geometry;
 import dev.amb.geo.data.input.GeoArea;
 import dev.amb.geo.data.input.SimpleCoord;
 import dev.amb.geo.data.output.GeoLookup;
@@ -116,15 +114,15 @@ public class GeoLookupService {
 
         } catch (JsonProcessingException jpe) {
             throw new WebApplicationException(
-                    Response.status(Response.Status.BAD_REQUEST).entity("JSON parsing exception : (" + jpe.getMessage() + ")").build());
+                    Response.status(Response.Status.BAD_REQUEST).type(MediaType.APPLICATION_JSON).entity("JSON parsing exception : (" + jpe.getMessage() + ")").build());
 
         } catch (SQLException sqle) {
             throw new WebApplicationException(
-                    Response.status(Response.Status.BAD_REQUEST).entity("SQL exception for query " + sql + " \n: Message = (" + sqle.getMessage() + ")").build());
+                    Response.status(Response.Status.BAD_REQUEST).type(MediaType.APPLICATION_JSON).entity("SQL exception for query " + sql + " \n: Message = (" + sqle.getMessage() + ")").build());
 
         } catch (Exception e) {
             throw new WebApplicationException(
-                    Response.status(Response.Status.BAD_REQUEST).entity("General exception : (" + e.getMessage() + ")").build());
+                    Response.status(Response.Status.BAD_REQUEST).type(MediaType.APPLICATION_JSON).entity("General exception : (" + e.getMessage() + ")").build());
         }
     }
 
@@ -169,7 +167,7 @@ public class GeoLookupService {
                 geoResult.setGeos(geoLookups);
 
                 // get KML string
-                String kml = KmlUtil.createGeoLookupKml(geoLookups);
+                String kml = GeoKmlUtil.createGeoLookupKml(geoLookups);
 
                 return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity(kml).build();
 
@@ -290,7 +288,7 @@ public class GeoLookupService {
 
                 geoResult.setGeos(geoLookups);
 
-                String kml = KmlUtil.createGeoLookupKml(geoLookups);
+                String kml = GeoKmlUtil.createGeoLookupKml(geoLookups);
                 return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity(kml).build();
 
             } else {
@@ -381,7 +379,7 @@ public class GeoLookupService {
                     }
                 }
 
-                String kml = KmlUtil.createAreaSearchKml(geoResults);
+                String kml = GeoKmlUtil.createAreaSearchKml(geoResults);
                 return Response.status(Response.Status.OK).type(MediaType.TEXT_XML).entity(kml).build();
 
             } catch (Exception e) {
